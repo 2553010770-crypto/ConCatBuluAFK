@@ -4,15 +4,15 @@ const app = express();
 
 // --- WEB SERVER (GIỮ RENDER SỐNG) ---
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('Bot đang chạy chế độ Giả Lập Người Chơi (Anti-Ban V2)'));
+app.get('/', (req, res) => res.send('Bot V3: Đang chạy chế độ Anti-Idle Pro (Di chuyển thực tế)'));
 app.listen(PORT, () => console.log(`[WEB] Server on port ${PORT}`));
 
 // --- CẤU HÌNH BOT ---
 const botOptions = {
-    host: 'AeDaDen-TWSO.aternos.me', // IP Server
-    port: 25560,                    // Port Server
-    username: 'ConCatBulu',         // Tên Bot (Dùng tên cũ để admin nhận ra)
-    version: '1.21.1',              // Phiên bản giả lập
+    host: 'AeDaDen-TWSO.aternos.me',
+    port: 25560,
+    username: 'ConCatBulu',
+    version: '1.21.1',
     auth: 'offline'
 };
 
@@ -23,21 +23,22 @@ function createBot() {
     bot = mineflayer.createBot(botOptions);
 
     bot.on('login', () => {
-        console.log('[BOT] >> Đã vào server! Bắt đầu kích hoạt hành vi giả người.');
-        // Bắt đầu vòng lặp hành động ngẫu nhiên
+        console.log('[BOT] >> Đã vào server! Kích hoạt chế độ di chuyển chống AFK.');
         randomBehavior(); 
     });
 
     bot.on('spawn', () => {
-        // Chat một câu ngẫu nhiên khi mới vào để server tin là người
+        // Chat một câu ngẫu nhiên khi mới vào
         setTimeout(() => {
-            bot.chat('Hello server, bot da online lai roi!');
+            bot.chat('Hello server, bot da online!');
         }, 5000);
     });
 
     bot.on('end', (reason) => {
-        console.log(`[BOT] >> Mất kết nối: ${reason}. Thử lại sau 60s...`);
-        setTimeout(createBot, 60000); // Đợi lâu hơn chút để tránh bị flag spam
+        console.log(`[BOT] >> Mất kết nối: ${reason}. Thử lại sau 30s...`);
+        // Xóa bot cũ để tránh rò rỉ bộ nhớ
+        bot = null;
+        setTimeout(createBot, 30000);
     });
 
     bot.on('error', (err) => console.log(`[BOT] >> Lỗi: ${err.message}`));
@@ -47,35 +48,56 @@ function createBot() {
     });
 }
 
-// --- HÀM HÀNH ĐỘNG NGẪU NHIÊN (QUAN TRỌNG) ---
+// --- HÀM HÀNH ĐỘNG NGẪU NHIÊN (NÂNG CẤP) ---
 function randomBehavior() {
-    // Chỉ hoạt động nếu bot còn kết nối
     if (!bot || !bot.entity) return;
 
-    // Danh sách các hành động có thể làm
+    // Danh sách hành động mở rộng (Bao gồm di chuyển)
     const actions = [
+        'walk_forward', // Đi tới
+        'walk_back',    // Đi lùi
+        'walk_left',    // Đi trái
+        'walk_right',   // Đi phải
         'jump',         // Nhảy
-        'rotate',       // Quay đầu nhìn quanh
+        'rotate',       // Quay đầu
         'swing',        // Đánh tay
-        'sneak',        // Ngồi xuống (Shift)
-        'switch_slot'   // Đổi ô đồ trên tay
+        'look_at_player' // Nhìn người gần nhất
     ];
 
-    // Chọn bừa 1 hành động
     const randomAction = actions[Math.floor(Math.random() * actions.length)];
 
-    // Thực hiện hành động
+    // Thời gian thực hiện hành động (ngắn để không đi quá xa)
+    const duration = 500 + Math.random() * 1000; // 0.5s - 1.5s
+
     switch (randomAction) {
+        case 'walk_forward':
+            bot.setControlState('forward', true);
+            setTimeout(() => bot.setControlState('forward', false), duration);
+            break;
+            
+        case 'walk_back':
+            bot.setControlState('back', true);
+            setTimeout(() => bot.setControlState('back', false), duration);
+            break;
+
+        case 'walk_left':
+            bot.setControlState('left', true);
+            setTimeout(() => bot.setControlState('left', false), duration);
+            break;
+
+        case 'walk_right':
+            bot.setControlState('right', true);
+            setTimeout(() => bot.setControlState('right', false), duration);
+            break;
+
         case 'jump':
             bot.setControlState('jump', true);
-            // Nhảy trong khoảng thời gian ngẫu nhiên từ 0.5s đến 1s
-            setTimeout(() => bot.setControlState('jump', false), 500 + Math.random() * 500);
+            setTimeout(() => bot.setControlState('jump', false), duration);
             break;
 
         case 'rotate':
-            // Quay đầu ngẫu nhiên một chút
-            const yaw = (Math.random() - 0.5) * Math.PI; // Quay trái phải
-            const pitch = (Math.random() - 0.5) * Math.PI / 2; // Nhìn lên xuống
+            const yaw = (Math.random() - 0.5) * Math.PI; 
+            const pitch = (Math.random() - 0.5) * Math.PI / 2;
             bot.look(bot.entity.yaw + yaw, pitch);
             break;
 
@@ -83,23 +105,24 @@ function randomBehavior() {
             bot.swingArm('right');
             break;
 
-        case 'sneak':
-            bot.setControlState('sneak', true);
-            setTimeout(() => bot.setControlState('sneak', false), 1000 + Math.random() * 2000);
-            break;
-            
-        case 'switch_slot':
-            // Chọn ngẫu nhiên ô từ 0 đến 8 (thanh hotbar)
-            bot.setQuickBarSlot(Math.floor(Math.random() * 9));
+        case 'look_at_player':
+            // Tìm thực thể gần nhất (người chơi hoặc mob)
+            const entity = bot.nearestEntity();
+            if (entity) {
+                bot.lookAt(entity.position.offset(0, entity.height, 0));
+                bot.swingArm('right'); // Vẫy tay chào
+            } else {
+                // Nếu không có ai thì quay đầu ngẫu nhiên
+                bot.look(bot.entity.yaw + 1, 0);
+            }
             break;
     }
 
-    // --- QUAN TRỌNG NHẤT: THỜI GIAN CHỜ NGẪU NHIÊN ---
-    // Không bao giờ lặp lại đúng giờ.
-    // Random thời gian chờ từ 10 giây đến 40 giây.
-    const nextTime = 10000 + Math.random() * 30000; 
+    // --- THỜI GIAN CHỜ MỚI ---
+    // Giảm xuống còn 2 - 8 giây để server thấy bot hoạt động liên tục
+    const nextTime = 2000 + Math.random() * 6000; 
     
-    console.log(`[Anti-AFK] Đã làm: ${randomAction}. Hành động tiếp theo sau: ${Math.round(nextTime/1000)}s`);
+    console.log(`[Anti-AFK] Hành động: ${randomAction}. Chờ: ${Math.round(nextTime/1000)}s`);
     
     setTimeout(randomBehavior, nextTime);
 }
